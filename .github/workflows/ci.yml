@@ -1,0 +1,18 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore RutubeBrowserClient.slnx
+      - run: dotnet build RutubeBrowserClient.slnx --configuration Release --no-restore
+      - run: dotnet test RutubeBrowserClient.slnx --configuration Release --no-build
+      - run: dotnet pack src/RutubeBrowserClient/RutubeBrowserClient.csproj --configuration Release --no-build --output artifacts
