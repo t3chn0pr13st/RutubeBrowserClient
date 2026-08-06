@@ -1,0 +1,11 @@
+.worktrees/
+**/bin/
+**/obj/
+artifacts/
+*.user
+*.suo
+*.session.json
+*.session.json.tmp
+playwright-report/
+test-results/
+.DS_Store
