@@ -14,20 +14,23 @@ OTP и CAPTCHA. После появления auth-cookie или access token с
 эквивалентом пароля. После `401` transport ровно один раз вызывает refresh endpoint и повторяет
 исходный запрос с новым access token.
 
-## Live contract `studio-v2-2026-08-06`
+## Live contract `studio-v2-2026-08-06-r2`
 
 По умолчанию paths имеют вид:
 
-- `POST v2/video/create/stream/` — создание (`stream_status=WAIT`);
+- `POST v2/video/create/stream/` — создание (`stream_status=wait`);
 - `GET/POST v2/video/stream/{id}/` — detail/update/transition;
-- `GET v2/video/stream/?owner_id=...` — reconciliation;
+- `GET v2/video/stream/owner/?stream_status=...` — capability и owner-scoped reconciliation;
+- `POST v1/video/stream/{id}/permkey/` — смена типа или ротация ключа;
 - `POST video/{id}/thumbnail/?client=vulp` — обложка.
 
-Start/finish/delete отправляются как status transition; значения конфигурируются. Create несёт
-`Idempotency-Key`, `X-Request-ID` и `client_reference`. Если соединение оборвалось до ответа,
+Start переводит `access_status` в `public`; finish/delete отправляют `stream_status=done/deleted`.
+Create несёт `Idempotency-Key` и `X-Request-ID`; Studio не сохраняет client reference в объекте.
+Если соединение оборвалось до ответа,
 клиент выбрасывает `RutubeOutcomeUnknownException`: вызывающий код обязан выполнить
 `ReconcileOwnedAsync`, а не повторять create. Reconciliation только читает данные и требует
-совпадения owner + client reference либо owner + точный title + planned time в окне 2 минуты.
+совпадения client reference, если Studio его вернул, либо точного title + planned time в окне 2 минуты
+внутри авторизованного owner endpoint.
 
 Контракт недокументирован и включается явно. `ProbeCapabilityAsync` не заменяет приватный canary.
 

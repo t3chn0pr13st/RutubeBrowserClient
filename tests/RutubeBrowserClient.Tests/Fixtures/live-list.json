@@ -1,1 +1,1 @@
-{"results":[{"id":"live-100","owner_id":"owner-42","client_reference":"event-abc","title":"Morning practice","stream_status":"WAIT","planned_start_time":"2026-08-07T07:00:00Z"},{"id":"live-101","owner_id":"owner-42","client_reference":"other","title":"Other","stream_status":"LIVE"}]}
+{"has_next":false,"results":[{"video":"a47c16f9db2a6e9b5fd1426596cb686d","title":"Morning practice","stream_status":"wait","planned_start_time":"2026-08-07T07:00:00Z"},{"video":"live-101","title":"Other","stream_status":"actual"}]}

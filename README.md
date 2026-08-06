@@ -15,9 +15,9 @@
 - typed identity и категории;
 - VOD: потоковая загрузка, чтение, изменение, удаление и обложка;
 - Live: capability probe, create/detail/update/start/finish/delete, обложка, временный/постоянный ключ;
-- owner/client-reference reconciliation после неоднозначного timeout без повторного создания;
+- owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.1`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.2`, MIT.
 
 ## Быстрый старт
 
@@ -58,7 +58,7 @@ var streamKey = live.Ingest?.StreamKey;
 
 ## Private Studio contract
 
-Автоматизация live опирается на наблюдавшийся контракт `studio-v2-2026-08-06-r1`, потому по умолчанию
+Автоматизация live опирается на наблюдавшийся контракт `studio-v2-2026-08-06-r2`, потому по умолчанию
 `EnablePrivateStudioApi=false`. Перед включением новая версия должна пройти `ProbeCapabilityAsync()`
 и приватный canary: создать скрытую трансляцию, загрузить обложку, запустить, завершить и убедиться,
 что запись доступна по прежнему provider id. Все paths и transition status values конфигурируемы в

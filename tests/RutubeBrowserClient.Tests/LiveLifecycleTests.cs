@@ -26,17 +26,20 @@ public sealed class LiveLifecycleTests
             ClientReference = "event-abc"
         });
 
-        Assert.Equal("live-100", result.Id);
+        Assert.Equal("a47c16f9db2a6e9b5fd1426596cb686d", result.Id);
         Assert.Equal(RutubeLiveStreamStatus.Waiting, result.Status);
         Assert.Equal("super-secret-key", result.Ingest!.StreamKey);
+        Assert.Equal("rtmp://rtmp-lb-b.dth.rutube.ru/live_push", result.Ingest.Url!.ToString().TrimEnd('/'));
+        Assert.Equal("https://rutube.ru/video/private/a47c16f9db2a6e9b5fd1426596cb686d/?p=private-playback-key", result.PlaybackUrl!.ToString());
+        Assert.Equal(RutubeLiveVisibility.LinkOnly, result.Visibility);
         Assert.DoesNotContain("super-secret-key", result.ToString());
         Assert.DoesNotContain("super-secret-key", result.Ingest.ToString());
         var captured = handler.Requests.Single();
         using var body = JsonDocument.Parse(captured.Body);
-        Assert.Equal("WAIT", body.RootElement.GetProperty("stream_status").GetString());
+        Assert.Equal("wait", body.RootElement.GetProperty("stream_status").GetString());
         Assert.True(body.RootElement.GetProperty("is_hidden").GetBoolean());
-        Assert.Equal("temporary", body.RootElement.GetProperty("stream_key_type").GetString());
-        Assert.Equal("event-abc", body.RootElement.GetProperty("client_reference").GetString());
+        Assert.False(body.RootElement.TryGetProperty("stream_key_type", out _));
+        Assert.False(body.RootElement.TryGetProperty("client_reference", out _));
         Assert.Equal("event-abc", captured.Headers["Idempotency-Key"]);
         Assert.Equal("Bearer access-secret", captured.Headers["Authorization"]);
         Assert.Contains("sessionid=cookie-secret", captured.Headers["Cookie"]);
@@ -50,12 +53,18 @@ public sealed class LiveLifecycleTests
         {
             if (request.Method == HttpMethod.Post && request.Uri.AbsolutePath == "/api/v2/video/stream/live-100/")
             {
-                if (request.Body.Contains("DELETE", StringComparison.Ordinal)) return Task.FromResult(TestData.Json("{}"));
-                var fixture = TestData.Fixture("live-created.json");
-                var status = request.Body.Contains("START", StringComparison.Ordinal) ? "LIVE" :
-                    request.Body.Contains("END", StringComparison.Ordinal) ? "FINISHED" : "WAIT";
-                return Task.FromResult(TestData.Json(fixture.Replace("\"WAIT\"", $"\"{status}\"", StringComparison.Ordinal)));
+                if (request.Body.Contains("deleted", StringComparison.Ordinal)) return Task.FromResult(TestData.Json("{}"));
+                var fixture = TestData.Fixture("live-created.json")
+                    .Replace("a47c16f9db2a6e9b5fd1426596cb686d", "live-100", StringComparison.Ordinal);
+                var status = request.Body.Contains("access_status", StringComparison.Ordinal) ? "actual" :
+                    request.Body.Contains("done", StringComparison.Ordinal) ? "done" : "wait";
+                return Task.FromResult(TestData.Json(fixture.Replace("\"wait\"", $"\"{status}\"", StringComparison.Ordinal)));
             }
+            if (request.Method == HttpMethod.Post && request.Uri.AbsolutePath == "/api/v1/video/stream/live-100/permkey/")
+                return Task.FromResult(TestData.Json("{\"perm_key\":\"rotated-secret\"}"));
+            if (request.Method == HttpMethod.Get && request.Uri.AbsolutePath == "/api/v2/video/stream/live-100/")
+                return Task.FromResult(TestData.Json(TestData.Fixture("live-created.json")
+                    .Replace("a47c16f9db2a6e9b5fd1426596cb686d", "live-100", StringComparison.Ordinal)));
             throw new InvalidOperationException(request.Uri.ToString());
         });
         await using var client = TestData.Client(handler);
@@ -76,13 +85,20 @@ public sealed class LiveLifecycleTests
         Assert.Equal(RutubeLiveStreamStatus.Finished, finished.Status);
         Assert.Equal("live-100", updated.Id);
         Assert.Equal("live-100", rotated.Id);
-        Assert.Equal(5, handler.Requests.Count);
-        Assert.All(handler.Requests, x => Assert.Equal("/api/v2/video/stream/live-100/", x.Uri.AbsolutePath));
+        Assert.Equal(6, handler.Requests.Count);
+        Assert.Equal("/api/v1/video/stream/live-100/permkey/", handler.Requests[2].Uri.AbsolutePath);
+        Assert.Equal("/api/v2/video/stream/live-100/", handler.Requests[3].Uri.AbsolutePath);
         using var updateBody = JsonDocument.Parse(handler.Requests[0].Body);
         Assert.False(updateBody.RootElement.GetProperty("is_hidden").GetBoolean());
+        using var startBody = JsonDocument.Parse(handler.Requests[1].Body);
+        Assert.Equal("public", startBody.RootElement.GetProperty("access_status").GetString());
         using var rotateBody = JsonDocument.Parse(handler.Requests[2].Body);
-        Assert.True(rotateBody.RootElement.GetProperty("regenerate_stream_key").GetBoolean());
-        Assert.Equal("permanent", rotateBody.RootElement.GetProperty("stream_key_type").GetString());
+        Assert.True(rotateBody.RootElement.GetProperty("is_active").GetBoolean());
+        Assert.True(rotateBody.RootElement.GetProperty("new_key").GetBoolean());
+        using var finishBody = JsonDocument.Parse(handler.Requests[4].Body);
+        Assert.Equal("done", finishBody.RootElement.GetProperty("stream_status").GetString());
+        using var deleteBody = JsonDocument.Parse(handler.Requests[5].Body);
+        Assert.Equal("deleted", deleteBody.RootElement.GetProperty("stream_status").GetString());
     }
 
     [Fact]
@@ -96,23 +112,26 @@ public sealed class LiveLifecycleTests
 
         var result = await client.Live.StartAsync("live-100");
 
-        Assert.Equal("live-100", result.Id);
+        Assert.Equal("a47c16f9db2a6e9b5fd1426596cb686d", result.Id);
         Assert.Equal([HttpMethod.Post, HttpMethod.Get], handler.Requests.Select(x => x.Method));
     }
 
     [Fact]
-    public async Task Reconcile_filters_owned_stream_by_client_reference_without_creating()
+    public async Task Reconcile_uses_current_owner_endpoint_and_immutable_fallback_without_creating()
     {
         var handler = new RecordingHandler((request, _) => Task.FromResult(TestData.Json(TestData.Fixture("live-list.json"))));
         await using var client = TestData.Client(handler);
 
-        var match = await client.Live.ReconcileOwnedAsync(new RutubeLiveReconcileRequest("owner-42", "event-abc"));
+        var match = await client.Live.ReconcileOwnedAsync(new RutubeLiveReconcileRequest(
+            "owner-42", "event-abc", "Morning practice", new DateTimeOffset(2026, 8, 7, 7, 0, 0, TimeSpan.Zero)));
 
         Assert.NotNull(match);
-        Assert.Equal("live-100", match.Id);
+        Assert.Equal("a47c16f9db2a6e9b5fd1426596cb686d", match.Id);
         var request = handler.Requests.Single();
         Assert.Equal(HttpMethod.Get, request.Method);
-        Assert.Contains("owner_id=owner-42", request.Uri.Query);
+        Assert.Equal("/api/v2/video/stream/owner/", request.Uri.AbsolutePath);
+        Assert.Contains("stream_status=actual,wait,done,disable,fin_err", Uri.UnescapeDataString(request.Uri.Query));
+        Assert.Contains("per_page=100", request.Uri.Query);
     }
 
     [Fact]
@@ -150,9 +169,27 @@ public sealed class LiveLifecycleTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task Capability_uses_current_owner_stream_endpoint_and_paging_contract()
+    {
+        var handler = new RecordingHandler((_, _) => Task.FromResult(TestData.Json("{\"results\":[]}")));
+        await using var client = TestData.Client(handler);
+
+        var capability = await client.Live.ProbeCapabilityAsync();
+
+        Assert.True(capability.Available);
+        Assert.Equal("studio-v2-2026-08-06-r2", capability.ContractVersion);
+        var request = handler.Requests.Single();
+        Assert.Equal("/api/v2/video/stream/owner/", request.Uri.AbsolutePath);
+        Assert.Equal("?stream_status=wait&page=1&per_page=1", request.Uri.Query);
+    }
+
     [Theory]
     [InlineData("WAIT", RutubeLiveStreamStatus.Waiting)]
     [InlineData("LIVE", RutubeLiveStreamStatus.Live)]
+    [InlineData("actual", RutubeLiveStreamStatus.Live)]
+    [InlineData("done", RutubeLiveStreamStatus.Finished)]
+    [InlineData("fin_err", RutubeLiveStreamStatus.Failed)]
     [InlineData("PROCESSING", RutubeLiveStreamStatus.Processing)]
     [InlineData("PUBLISHED", RutubeLiveStreamStatus.Ready)]
     public void Provider_status_has_stable_domain_mapping(string provider, RutubeLiveStreamStatus expected) =>

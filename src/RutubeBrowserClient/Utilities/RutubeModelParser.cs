@@ -24,13 +24,16 @@ internal static class RutubeModelParser
     public static RutubeLiveStream Live(JsonElement root)
     {
         root = JsonLookup.Unwrap(root);
-        var id = JsonLookup.String(root, "video_id", "stream_id", "id", "uuid") ?? throw Contract("live", "stream id");
+        var id = JsonLookup.String(root, "video_id", "stream_id", "id", "uuid", "video") ?? throw Contract("live", "stream id");
         var providerStatus = JsonLookup.String(root, "stream_status", "status", "video_status");
         JsonElement ingestElement = root;
         var candidate = JsonLookup.Find(root, "stream") ?? JsonLookup.Find(root, "ingest");
         if (candidate is { ValueKind: JsonValueKind.Object }) ingestElement = candidate.Value;
         var ingestUrl = JsonLookup.Uri(ingestElement, "rtmps_url", "rtmp_url", "stream_url", "url", "server");
-        var key = JsonLookup.String(ingestElement, "stream_key", "key", "broadcast_key");
+        var inputServers = JsonLookup.Find(root, "input_servers");
+        if (ingestUrl is null && inputServers is { ValueKind: JsonValueKind.Object })
+            ingestUrl = JsonLookup.Uri(inputServers.Value, "primary");
+        var key = JsonLookup.String(ingestElement, "stream_key", "key", "broadcast_key", "input_key_gen");
         RutubeIngest? ingest = ingestUrl is null && string.IsNullOrWhiteSpace(key) ? null : new RutubeIngest
         {
             Url = ingestUrl,
@@ -47,7 +50,10 @@ internal static class RutubeModelParser
             Title = JsonLookup.String(root, "title", "name") ?? "",
             Description = JsonLookup.String(root, "description") ?? "",
             CategoryId = JsonLookup.String(root, "category_id", "category"),
-            Visibility = (JsonLookup.Bool(root, "is_hidden", "hidden") ?? false) ? RutubeLiveVisibility.LinkOnly : RutubeLiveVisibility.Public,
+            Visibility = string.Equals(JsonLookup.String(root, "access_status"), "private", StringComparison.OrdinalIgnoreCase)
+                || (JsonLookup.Bool(root, "is_hidden", "hidden") ?? false)
+                    ? RutubeLiveVisibility.LinkOnly
+                    : RutubeLiveVisibility.Public,
             Status = MapStatus(providerStatus),
             ProviderStatus = providerStatus,
             PlannedStartTime = JsonLookup.Date(root, "planned_start_time", "scheduled_at"),
@@ -57,7 +63,8 @@ internal static class RutubeModelParser
             PlaybackUrl = JsonLookup.Uri(root, "source_url", "video_url", "public_url", "web_url"),
             EmbedUrl = JsonLookup.Uri(root, "embed_url", "embed"),
             ThumbnailUrl = JsonLookup.Uri(root, "thumbnail_url", "thumbnail", "picture_url"),
-            SignalPresent = JsonLookup.Bool(root, "signal_present", "has_signal", "is_signal") ?? false
+            SignalPresent = JsonLookup.Bool(root, "signal_present", "has_signal", "is_signal") ??
+                string.Equals(providerStatus, "actual", StringComparison.OrdinalIgnoreCase)
         };
     }
 
@@ -68,11 +75,11 @@ internal static class RutubeModelParser
         {
             "WAIT" or "WAITING" or "SCHEDULED" => RutubeLiveStreamStatus.Waiting,
             "READY" or "PREPARED" or "IDLE" => RutubeLiveStreamStatus.Prepared,
-            "START" or "STARTED" or "RUNNING" or "LIVE" or "ONLINE" => RutubeLiveStreamStatus.Live,
-            "END" or "ENDED" or "FINISHED" or "STOPPED" => RutubeLiveStreamStatus.Finished,
+            "START" or "STARTED" or "RUNNING" or "LIVE" or "ONLINE" or "ACTUAL" => RutubeLiveStreamStatus.Live,
+            "END" or "ENDED" or "FINISHED" or "STOPPED" or "DONE" => RutubeLiveStreamStatus.Finished,
             "PROCESSING" or "CONVERTING" => RutubeLiveStreamStatus.Processing,
             "PUBLISHED" or "COMPLETED" or "VOD" => RutubeLiveStreamStatus.Ready,
-            "FAILED" or "ERROR" or "REJECTED" => RutubeLiveStreamStatus.Failed,
+            "FAILED" or "ERROR" or "REJECTED" or "DISABLE" or "FIN_ERR" => RutubeLiveStreamStatus.Failed,
             "DELETED" or "REMOVED" => RutubeLiveStreamStatus.Deleted,
             _ => RutubeLiveStreamStatus.Unknown
         };

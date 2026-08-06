@@ -18,7 +18,8 @@ public sealed class RutubeLiveService
         {
             var api = await _client.RequireApiAsync(cancellationToken).ConfigureAwait(false);
             api.EnsurePrivateApiEnabled();
-            var query = _client.Options.StreamListPath + (_client.Options.StreamListPath.Contains('?') ? "&" : "?") + "limit=1";
+            var query = _client.Options.StreamListPath + (_client.Options.StreamListPath.Contains('?') ? "&" : "?") +
+                "stream_status=wait&page=1&per_page=1";
             using var _ = await api.GetStudioAsync(query, "live.capability", cancellationToken).ConfigureAwait(false);
             return new(true, _client.ContractVersion, _client.AccountId, "Rutube Studio live endpoint responded successfully.");
         }
@@ -41,9 +42,7 @@ public sealed class RutubeLiveService
             ["category"] = request.CategoryId,
             ["is_adult"] = request.IsAdult,
             ["is_hidden"] = request.Visibility == RutubeLiveVisibility.LinkOnly,
-            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
-            ["stream_key_type"] = request.StreamKeyMode == RutubeStreamKeyMode.Permanent ? "permanent" : "temporary",
-            ["client_reference"] = request.ClientReference
+            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)
         };
         using var document = await api.PostStudioAsync(_client.Options.CreateStreamPath, payload, "live.create", cancellationToken,
             outcomeUnknownOnTransportFailure: true, clientReference: request.ClientReference, idempotencyKey: request.ClientReference)
@@ -74,20 +73,25 @@ public sealed class RutubeLiveService
     }
 
     public Task<RutubeLiveStream> StartAsync(string streamId, CancellationToken cancellationToken = default) =>
-        TransitionAsync(streamId, new { stream_status = _client.Options.StartStreamStatusValue }, "live.start", cancellationToken);
+        TransitionAsync(streamId, new { access_status = _client.Options.StartAccessStatusValue }, "live.start", cancellationToken);
 
     public Task<RutubeLiveStream> FinishAsync(string streamId, CancellationToken cancellationToken = default) =>
         TransitionAsync(streamId, new { stream_status = _client.Options.FinishStreamStatusValue }, "live.finish", cancellationToken);
 
-    public Task<RutubeLiveStream> RotateStreamKeyAsync(
+    public async Task<RutubeLiveStream> RotateStreamKeyAsync(
         string streamId,
         RutubeStreamKeyMode mode,
-        CancellationToken cancellationToken = default) =>
-        TransitionAsync(streamId, new
-        {
-            stream_key_type = mode == RutubeStreamKeyMode.Permanent ? "permanent" : "temporary",
-            regenerate_stream_key = true
-        }, "live.rotate-key", cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var path = string.Format(CultureInfo.InvariantCulture, _client.Options.PermanentStreamKeyPathFormat,
+            RutubeVideosService.Segment(streamId));
+        object payload = mode == RutubeStreamKeyMode.Permanent
+            ? new Dictionary<string, object?> { ["is_active"] = true, ["new_key"] = true }
+            : new Dictionary<string, object?> { ["is_active"] = false };
+        using var _ = await api.PostStudioAsync(path, payload, "live.rotate-key", cancellationToken).ConfigureAwait(false);
+        return await GetAsync(streamId, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task DeleteAsync(string streamId, CancellationToken cancellationToken = default)
     {
@@ -116,11 +120,12 @@ public sealed class RutubeLiveService
         if (string.IsNullOrWhiteSpace(request.OwnerId)) throw new ArgumentException("Owner id is required.", nameof(request));
         var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
         var query = _client.Options.StreamListPath + (_client.Options.StreamListPath.Contains('?') ? "&" : "?") +
-            "owner_id=" + Uri.EscapeDataString(request.OwnerId) + "&limit=100";
+            "stream_status=actual,wait,done,disable,fin_err&page=1&per_page=100";
         using var document = await api.GetStudioAsync(query, "live.reconcile", cancellationToken).ConfigureAwait(false);
         var matches = JsonLookup.Items(document.RootElement)
             .Select(RutubeModelParser.Live)
-            .Where(stream => string.Equals(stream.OwnerId, request.OwnerId, StringComparison.Ordinal)
+            .Where(stream => (string.IsNullOrWhiteSpace(stream.OwnerId)
+                    || string.Equals(stream.OwnerId, request.OwnerId, StringComparison.Ordinal))
                 && (string.Equals(stream.ClientReference, request.ClientReference, StringComparison.Ordinal)
                     || MatchesFallback(stream, request)))
             .ToArray();
