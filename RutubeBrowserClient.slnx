@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/RutubeBrowserClient.ConsoleSample/RutubeBrowserClient.ConsoleSample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/RutubeBrowserClient/RutubeBrowserClient.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RutubeBrowserClient.Tests/RutubeBrowserClient.Tests.csproj" />
+  </Folder>
+</Solution>
