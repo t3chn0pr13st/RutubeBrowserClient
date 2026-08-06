@@ -75,33 +75,21 @@ public sealed class PlaywrightAuthenticator : IInteractiveAuthenticator
     private async Task WaitForLoginAsync(IBrowserContext context, IPage page, CancellationToken cancellationToken)
     {
         var deadline = DateTimeOffset.UtcNow + _options.LoginTimeout;
+        var identityUrl = new Uri(_options.PublicApiUri, _options.IdentityPath).ToString();
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var cookies = await context.CookiesAsync().ConfigureAwait(false);
-                var hasAuthCookie = cookies.Any(c => c.Domain.Contains("rutube.ru", StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrWhiteSpace(c.Value)
-                    && (c.Name.Contains("session", StringComparison.OrdinalIgnoreCase)
-                        || c.Name.Contains("token", StringComparison.OrdinalIgnoreCase)
-                        || c.Name.Contains("auth", StringComparison.OrdinalIgnoreCase)));
-                var hasStoredToken = await page.EvaluateAsync<bool>("""
-                    () => {
-                      try {
-                        for (let i = 0; i < localStorage.length; i++) {
-                          const k = localStorage.key(i) || '';
-                          if (/access.?token|refresh.?token|authorization/i.test(k) && localStorage.getItem(k)) return true;
-                        }
-                      } catch (_) {}
-                      return false;
-                    }
-                    """).ConfigureAwait(false);
                 var uri = Uri.TryCreate(page.Url, UriKind.Absolute, out var parsed) ? parsed : null;
                 var onStudio = uri?.Host.EndsWith("rutube.ru", StringComparison.OrdinalIgnoreCase) == true
                     && !uri.AbsolutePath.Contains("login", StringComparison.OrdinalIgnoreCase)
                     && !uri.AbsolutePath.Contains("auth", StringComparison.OrdinalIgnoreCase);
-                if ((hasAuthCookie || hasStoredToken) && onStudio) return;
+                if (onStudio && await HasAuthenticatedVisitorAsync(page, identityUrl).ConfigureAwait(false))
+                {
+                    Status("Rutube sign-in confirmed by the authenticated visitor endpoint.");
+                    return;
+                }
             }
             catch (PlaywrightException ex) when (IsClosed(ex))
             {
@@ -111,6 +99,29 @@ public sealed class PlaywrightAuthenticator : IInteractiveAuthenticator
             await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         }
         throw new RutubeClientException($"Rutube login did not complete within {_options.LoginTimeout.TotalMinutes:0} minutes.");
+    }
+
+    private static async Task<bool> HasAuthenticatedVisitorAsync(IPage page, string identityUrl)
+    {
+        try
+        {
+            return await page.EvaluateAsync<bool>("""
+                async url => {
+                  try {
+                    const response = await fetch(url, { credentials: 'include' });
+                    if (!response.ok) return false;
+                    const visitor = await response.json();
+                    return visitor && visitor.id !== undefined && visitor.id !== null && String(visitor.id).length > 0;
+                  } catch (_) {
+                    return false;
+                  }
+                }
+                """, identityUrl).ConfigureAwait(false);
+        }
+        catch (PlaywrightException)
+        {
+            return false;
+        }
     }
 
     private static async Task<RutubeSession> CaptureAsync(IBrowserContext context, IPage page)

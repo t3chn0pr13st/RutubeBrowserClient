@@ -8,7 +8,7 @@ public sealed class RutubeIdentityService
     public async Task<RutubeIdentity> GetAsync(CancellationToken cancellationToken = default)
     {
         var api = await _client.RequireApiAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await api.GetStudioAsync(_client.Options.IdentityPath, "identity.get", cancellationToken).ConfigureAwait(false);
+        using var document = await api.GetPublicAsync(_client.Options.IdentityPath, "identity.get", cancellationToken).ConfigureAwait(false);
         var root = JsonLookup.Unwrap(document.RootElement);
         var id = JsonLookup.String(root, "account_id", "user_id", "owner_id", "id")?.Trim();
         if (string.IsNullOrWhiteSpace(id))
@@ -18,7 +18,7 @@ public sealed class RutubeIdentityService
             JsonLookup.String(root, "username", "login"),
             JsonLookup.String(root, "display_name", "name", "title"),
             JsonLookup.String(root, "channel_id", "channel"),
-            JsonLookup.Bool(root, "phone_verified", "is_phone_confirmed", "phone_confirmed") ?? false);
+            JsonLookup.Bool(root, "phone_verified", "is_phone_confirmed", "phone_confirmed", "has_phone") ?? false);
         await _client.UpdateIdentityAsync(identity, cancellationToken).ConfigureAwait(false);
         return identity;
     }

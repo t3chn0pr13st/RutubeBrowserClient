@@ -52,7 +52,7 @@ public sealed class RutubeClient : IAsyncDisposable
             {
                 return await VerifyIdentityCoreAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (RutubeApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+            catch (RutubeApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 _options.StatusCallback?.Invoke("Saved Rutube session expired; interactive sign-in is required.");
                 await InteractiveLoginCoreAsync(cancellationToken).ConfigureAwait(false);

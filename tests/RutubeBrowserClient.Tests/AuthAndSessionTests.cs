@@ -64,6 +64,30 @@ public sealed class AuthAndSessionTests
     }
 
     [Fact]
+    public async Task Ensure_authenticated_replaces_saved_session_when_current_visitor_endpoint_returns_forbidden()
+    {
+        var calls = 0;
+        var handler = new RecordingHandler((request, _) =>
+        {
+            Assert.Equal("/api/v2/accounts/visitor/", request.Uri.AbsolutePath);
+            calls++;
+            return Task.FromResult(calls == 1
+                ? TestData.Json("{\"detail\":\"not authenticated\"}", HttpStatusCode.Forbidden)
+                : TestData.Json(TestData.Fixture("identity.json")));
+        });
+        var store = new MemorySessionStore(TestData.Session("expired-access"));
+        var authenticator = new StubAuthenticator(TestData.Session("replacement-access"));
+        await using var client = TestData.Client(handler, store: store, authenticator: authenticator);
+
+        var identity = await client.EnsureAuthenticatedAsync();
+
+        Assert.Equal("owner-42", identity.AccountId);
+        Assert.Equal(1, authenticator.Calls);
+        Assert.Equal("replacement-access", store.Session!.AccessToken);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public async Task Portable_base64_round_trip_keeps_credentials_but_string_representation_redacts_them()
     {
         var original = TestData.Session();

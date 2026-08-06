@@ -8,7 +8,7 @@ public sealed class RutubeClientOptions
     public string StudioApiBaseUrl { get; set; } = "https://studio.rutube.ru/api/";
     public string PublicApiBaseUrl { get; set; } = "https://rutube.ru/api/";
     public string LoginUrl { get; set; } = "https://studio.rutube.ru/";
-    public string IdentityPath { get; set; } = "profile/";
+    public string IdentityPath { get; set; } = "v2/accounts/visitor/?client=vulp";
     public string CategoriesPath { get; set; } = "v2/video/categories/";
     public string VideoPath { get; set; } = "video/";
     public string CreateStreamPath { get; set; } = "v2/video/create/stream/";
@@ -20,7 +20,7 @@ public sealed class RutubeClientOptions
     public string StartStreamStatusValue { get; set; } = "START";
     public string FinishStreamStatusValue { get; set; } = "END";
     public string DeleteStreamStatusValue { get; set; } = "DELETE";
-    public string ContractVersion { get; set; } = "studio-v2-2026-08-06";
+    public string ContractVersion { get; set; } = "studio-v2-2026-08-06-r1";
     public bool EnablePrivateStudioApi { get; set; }
     public bool HeadlessLogin { get; set; }
     public TimeSpan LoginTimeout { get; set; } = TimeSpan.FromMinutes(10);

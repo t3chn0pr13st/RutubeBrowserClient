@@ -7,10 +7,10 @@ namespace RutubeBrowserClient.Tests;
 public sealed class VodAndMetadataTests
 {
     [Fact]
-    public async Task Identity_and_categories_parse_wrapped_studio_fixtures()
+    public async Task Identity_uses_current_public_visitor_endpoint_and_categories_parse_studio_fixture()
     {
         var handler = new RecordingHandler((request, _) => Task.FromResult(TestData.Json(
-            request.Uri.AbsolutePath.EndsWith("/profile/", StringComparison.Ordinal)
+            request.Uri.AbsolutePath.EndsWith("/v2/accounts/visitor/", StringComparison.Ordinal)
                 ? TestData.Fixture("identity.json")
                 : TestData.Fixture("categories.json"))));
         await using var client = TestData.Client(handler);
@@ -21,6 +21,9 @@ public sealed class VodAndMetadataTests
         Assert.Equal("owner-42", identity.AccountId);
         Assert.True(identity.PhoneVerified);
         Assert.Equal("channel-77", identity.ChannelId);
+        Assert.Equal("public.test", handler.Requests[0].Uri.Host);
+        Assert.Equal("/api/v2/accounts/visitor/", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal("vulp", System.Web.HttpUtility.ParseQueryString(handler.Requests[0].Uri.Query)["client"]);
         Assert.Collection(categories,
             x => { Assert.Equal("8", x.Id); Assert.True(x.IsActive); },
             x => { Assert.Equal("9", x.Id); Assert.False(x.IsActive); });
