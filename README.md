@@ -18,7 +18,7 @@
   подключение существующего постоянного ключа без его смены и явная ротация постоянного ключа;
 - owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.3`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.4`, MIT.
 
 ## Быстрый старт
 
@@ -56,7 +56,8 @@ var live = await client.Live.CreateAsync(new RutubeLiveCreateRequest
 var rtmpServer = live.Ingest?.Url;
 var streamKey = live.Ingest?.StreamKey;
 
-// Подключить уже существующий постоянный ключ аккаунта без генерации нового:
+// Подключить уже существующий постоянный ключ аккаунта без генерации нового.
+// Запрос отправляет только is_active=true и намеренно не передаёт new_key:
 live = await client.Live.UsePermanentStreamKeyAsync(live.Id);
 
 // Отдельная явная операция: сгенерировать новый постоянный ключ аккаунта.
@@ -71,6 +72,10 @@ live = await client.Live.RotateStreamKeyAsync(live.Id, RutubeStreamKeyMode.Perma
 и приватный canary: создать скрытую трансляцию, загрузить обложку, запустить, завершить и убедиться,
 что запись доступна по прежнему provider id. Все paths и transition status values конфигурируемы в
 `RutubeClientOptions`, но прикладной код должен использовать только typed services.
+
+Для выбора существующего постоянного ключа Studio JS `release-baldr-354` отправляет в
+`permkey` только `is_active=true`. Поле `new_key=true` зарезервировано для явного сброса/ротации
+и не отправляется методом `UsePermanentStreamKeyAsync`.
 
 Подробнее:
 

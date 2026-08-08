@@ -90,8 +90,7 @@ public sealed class RutubeLiveService
             RutubeVideosService.Segment(streamId));
         var payload = new Dictionary<string, object?>
         {
-            ["is_active"] = true,
-            ["new_key"] = false
+            ["is_active"] = true
         };
         using var _ = await api.PostStudioAsync(path, payload, "live.use-permanent-key", cancellationToken).ConfigureAwait(false);
         return await GetAsync(streamId, cancellationToken).ConfigureAwait(false);
