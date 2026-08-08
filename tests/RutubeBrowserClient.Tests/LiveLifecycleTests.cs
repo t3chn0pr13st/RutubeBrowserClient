@@ -124,8 +124,8 @@ public sealed class LiveLifecycleTests
         Assert.Equal("/api/v1/video/stream/live-100/permkey/", enable.Uri.AbsolutePath);
         using var body = JsonDocument.Parse(enable.Body);
         Assert.True(body.RootElement.GetProperty("is_active").GetBoolean());
-        Assert.False(body.RootElement.GetProperty("new_key").GetBoolean());
-        Assert.Equal(2, body.RootElement.EnumerateObject().Count());
+        Assert.False(body.RootElement.TryGetProperty("new_key", out _));
+        Assert.Single(body.RootElement.EnumerateObject());
         Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
         Assert.Equal("/api/v2/video/stream/live-100/", handler.Requests[1].Uri.AbsolutePath);
     }
