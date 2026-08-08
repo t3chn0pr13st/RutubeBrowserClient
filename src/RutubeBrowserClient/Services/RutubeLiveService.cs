@@ -78,6 +78,25 @@ public sealed class RutubeLiveService
     public Task<RutubeLiveStream> FinishAsync(string streamId, CancellationToken cancellationToken = default) =>
         TransitionAsync(streamId, new { stream_status = _client.Options.FinishStreamStatusValue }, "live.finish", cancellationToken);
 
+    /// <summary>
+    /// Enables the account's existing permanent stream key for this stream without generating or rotating it.
+    /// </summary>
+    public async Task<RutubeLiveStream> UsePermanentStreamKeyAsync(
+        string streamId,
+        CancellationToken cancellationToken = default)
+    {
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var path = string.Format(CultureInfo.InvariantCulture, _client.Options.PermanentStreamKeyPathFormat,
+            RutubeVideosService.Segment(streamId));
+        var payload = new Dictionary<string, object?>
+        {
+            ["is_active"] = true,
+            ["new_key"] = false
+        };
+        using var _ = await api.PostStudioAsync(path, payload, "live.use-permanent-key", cancellationToken).ConfigureAwait(false);
+        return await GetAsync(streamId, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<RutubeLiveStream> RotateStreamKeyAsync(
         string streamId,
         RutubeStreamKeyMode mode,

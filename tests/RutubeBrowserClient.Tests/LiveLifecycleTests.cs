@@ -102,6 +102,35 @@ public sealed class LiveLifecycleTests
     }
 
     [Fact]
+    public async Task Use_permanent_stream_key_enables_existing_key_without_rotation_and_returns_detail()
+    {
+        var handler = new RecordingHandler((request, _) =>
+        {
+            if (request.Method == HttpMethod.Post && request.Uri.AbsolutePath == "/api/v1/video/stream/live-100/permkey/")
+                return Task.FromResult(TestData.Json("{\"ok\":true}"));
+            if (request.Method == HttpMethod.Get && request.Uri.AbsolutePath == "/api/v2/video/stream/live-100/")
+                return Task.FromResult(TestData.Json(TestData.Fixture("live-created.json")
+                    .Replace("a47c16f9db2a6e9b5fd1426596cb686d", "live-100", StringComparison.Ordinal)));
+            throw new InvalidOperationException(request.Uri.ToString());
+        });
+        await using var client = TestData.Client(handler);
+
+        var result = await client.Live.UsePermanentStreamKeyAsync("live-100");
+
+        Assert.Equal("live-100", result.Id);
+        Assert.Equal(2, handler.Requests.Count);
+        var enable = handler.Requests[0];
+        Assert.Equal(HttpMethod.Post, enable.Method);
+        Assert.Equal("/api/v1/video/stream/live-100/permkey/", enable.Uri.AbsolutePath);
+        using var body = JsonDocument.Parse(enable.Body);
+        Assert.True(body.RootElement.GetProperty("is_active").GetBoolean());
+        Assert.False(body.RootElement.GetProperty("new_key").GetBoolean());
+        Assert.Equal(2, body.RootElement.EnumerateObject().Count());
+        Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+        Assert.Equal("/api/v2/video/stream/live-100/", handler.Requests[1].Uri.AbsolutePath);
+    }
+
+    [Fact]
     public async Task Transition_hydrates_detail_when_provider_returns_ack_only()
     {
         var handler = new RecordingHandler((request, _) => Task.FromResult(
