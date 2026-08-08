@@ -14,10 +14,11 @@
 - cookie, CSRF и bearer-заголовки, одно безопасное обновление access token после `401`;
 - typed identity и категории;
 - VOD: потоковая загрузка, чтение, изменение, удаление и обложка;
-- Live: capability probe, create/detail/update/start/finish/delete, обложка, временный/постоянный ключ;
+- Live: capability probe, create/detail/update/start/finish/delete, обложка, временный ключ,
+  подключение существующего постоянного ключа без его смены и явная ротация постоянного ключа;
 - owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.2`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.3`, MIT.
 
 ## Быстрый старт
 
@@ -54,6 +55,13 @@ var live = await client.Live.CreateAsync(new RutubeLiveCreateRequest
 // Эти значения — секреты; не логируйте весь объект/DTO.
 var rtmpServer = live.Ingest?.Url;
 var streamKey = live.Ingest?.StreamKey;
+
+// Подключить уже существующий постоянный ключ аккаунта без генерации нового:
+live = await client.Live.UsePermanentStreamKeyAsync(live.Id);
+
+// Отдельная явная операция: сгенерировать новый постоянный ключ аккаунта.
+// Используйте только когда действительно нужна ротация ключа.
+live = await client.Live.RotateStreamKeyAsync(live.Id, RutubeStreamKeyMode.Permanent);
 ```
 
 ## Private Studio contract
