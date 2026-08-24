@@ -22,6 +22,7 @@ public sealed class LiveLifecycleTests
             CategoryId = "8",
             Visibility = RutubeLiveVisibility.LinkOnly,
             PlannedStartTime = new DateTimeOffset(2026, 8, 7, 7, 0, 0, TimeSpan.Zero),
+            AutoStart = true,
             StreamKeyMode = RutubeStreamKeyMode.Temporary,
             ClientReference = "event-abc"
         });
@@ -32,12 +33,14 @@ public sealed class LiveLifecycleTests
         Assert.Equal("rtmp://rtmp-lb-b.dth.rutube.ru/live_push", result.Ingest.Url!.ToString().TrimEnd('/'));
         Assert.Equal("https://rutube.ru/video/private/a47c16f9db2a6e9b5fd1426596cb686d/?p=private-playback-key", result.PlaybackUrl!.ToString());
         Assert.Equal(RutubeLiveVisibility.LinkOnly, result.Visibility);
+        Assert.True(result.AutoStart);
         Assert.DoesNotContain("super-secret-key", result.ToString());
         Assert.DoesNotContain("super-secret-key", result.Ingest.ToString());
         var captured = handler.Requests.Single();
         using var body = JsonDocument.Parse(captured.Body);
         Assert.Equal("wait", body.RootElement.GetProperty("stream_status").GetString());
         Assert.True(body.RootElement.GetProperty("is_hidden").GetBoolean());
+        Assert.True(body.RootElement.GetProperty("push_auto_start").GetBoolean());
         Assert.False(body.RootElement.TryGetProperty("stream_key_type", out _));
         Assert.False(body.RootElement.TryGetProperty("client_reference", out _));
         Assert.Equal("event-abc", captured.Headers["Idempotency-Key"]);
@@ -74,7 +77,8 @@ public sealed class LiveLifecycleTests
             Title = "Updated",
             Description = "New",
             CategoryId = "8",
-            Visibility = RutubeLiveVisibility.Public
+            Visibility = RutubeLiveVisibility.Public,
+            AutoStart = true
         });
         var started = await client.Live.StartAsync("live-100");
         var rotated = await client.Live.RotateStreamKeyAsync("live-100", RutubeStreamKeyMode.Permanent);
@@ -90,6 +94,7 @@ public sealed class LiveLifecycleTests
         Assert.Equal("/api/v2/video/stream/live-100/", handler.Requests[3].Uri.AbsolutePath);
         using var updateBody = JsonDocument.Parse(handler.Requests[0].Body);
         Assert.False(updateBody.RootElement.GetProperty("is_hidden").GetBoolean());
+        Assert.True(updateBody.RootElement.GetProperty("push_auto_start").GetBoolean());
         using var startBody = JsonDocument.Parse(handler.Requests[1].Body);
         Assert.Equal("public", startBody.RootElement.GetProperty("access_status").GetString());
         using var rotateBody = JsonDocument.Parse(handler.Requests[2].Body);

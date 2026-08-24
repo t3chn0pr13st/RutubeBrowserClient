@@ -14,6 +14,8 @@ public sealed class RutubeLiveCreateRequest
     public RutubeLiveVisibility Visibility { get; init; }
     public bool IsAdult { get; init; }
     public DateTimeOffset? PlannedStartTime { get; init; }
+    /// <summary>Automatically starts the live session when Rutube receives the ingest signal.</summary>
+    public bool AutoStart { get; init; }
     public RutubeStreamKeyMode StreamKeyMode { get; init; } = RutubeStreamKeyMode.Temporary;
     public required string ClientReference { get; init; }
 
@@ -34,6 +36,8 @@ public sealed class RutubeLiveUpdateRequest
     public RutubeLiveVisibility Visibility { get; init; }
     public bool IsAdult { get; init; }
     public DateTimeOffset? PlannedStartTime { get; init; }
+    /// <summary>Automatically starts the live session when Rutube receives the ingest signal.</summary>
+    public bool AutoStart { get; init; }
     internal void Validate() => RequestValidation.Metadata(Title, Description, CategoryId);
 }
 
@@ -68,6 +72,8 @@ public sealed class RutubeLiveStream
     public DateTimeOffset? PlannedStartTime { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? FinishedAt { get; init; }
+    /// <summary>The provider-confirmed automatic-start setting.</summary>
+    public bool AutoStart { get; init; }
     public RutubeIngest? Ingest { get; init; }
     public Uri? PlaybackUrl { get; init; }
     public Uri? EmbedUrl { get; init; }

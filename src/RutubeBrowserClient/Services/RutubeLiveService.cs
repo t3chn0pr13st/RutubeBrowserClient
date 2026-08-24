@@ -42,7 +42,8 @@ public sealed class RutubeLiveService
             ["category"] = request.CategoryId,
             ["is_adult"] = request.IsAdult,
             ["is_hidden"] = request.Visibility == RutubeLiveVisibility.LinkOnly,
-            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)
+            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
+            ["push_auto_start"] = request.AutoStart
         };
         using var document = await api.PostStudioAsync(_client.Options.CreateStreamPath, payload, "live.create", cancellationToken,
             outcomeUnknownOnTransportFailure: true, clientReference: request.ClientReference, idempotencyKey: request.ClientReference)
@@ -68,7 +69,8 @@ public sealed class RutubeLiveService
             ["category"] = request.CategoryId,
             ["is_adult"] = request.IsAdult,
             ["is_hidden"] = request.Visibility == RutubeLiveVisibility.LinkOnly,
-            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)
+            ["planned_start_time"] = request.PlannedStartTime?.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
+            ["push_auto_start"] = request.AutoStart
         }, "live.update", cancellationToken);
     }
 

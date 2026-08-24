@@ -59,6 +59,7 @@ internal static class RutubeModelParser
             PlannedStartTime = JsonLookup.Date(root, "planned_start_time", "scheduled_at"),
             StartedAt = JsonLookup.Date(root, "started_at", "actual_start_time"),
             FinishedAt = JsonLookup.Date(root, "finished_at", "ended_at", "actual_finish_time"),
+            AutoStart = JsonLookup.Bool(root, "push_auto_start", "auto_start") ?? false,
             Ingest = ingest,
             PlaybackUrl = JsonLookup.Uri(root, "source_url", "video_url", "public_url", "web_url"),
             EmbedUrl = JsonLookup.Uri(root, "embed_url", "embed"),
