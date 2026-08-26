@@ -14,11 +14,11 @@
 - cookie, CSRF и bearer-заголовки, одно безопасное обновление access token после `401`;
 - typed identity и категории;
 - VOD: потоковая загрузка, чтение, изменение, удаление и обложка;
-- Live: capability probe, create/detail/update/start/finish/delete, обложка, временный ключ,
+- Live: capability probe, create/detail/update/start/finish/delete, текущие зрители/просмотры, обложка, временный ключ,
   подключение существующего постоянного ключа без его смены и явная ротация постоянного ключа;
 - owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.5`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.6`, MIT.
 
 ## Быстрый старт
 

@@ -7,7 +7,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageId>RutubeBrowserClient</PackageId>
-    <Version>0.1.5</Version>
+    <Version>0.1.6</Version>
     <Authors>technopriest</Authors>
     <Product>RutubeBrowserClient</Product>
     <Description>Unofficial .NET client for an authenticated Rutube Studio account with portable browser sessions, VOD operations, and a typed live-stream lifecycle.</Description>

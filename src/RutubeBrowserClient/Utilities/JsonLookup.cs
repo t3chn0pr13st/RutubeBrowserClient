@@ -36,6 +36,19 @@ internal static class JsonLookup
         return null;
     }
 
+    public static long? Int64(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+            if (Find(root, name) is { } value)
+            {
+                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
+                if (value.ValueKind == JsonValueKind.String &&
+                    long.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                    return parsed;
+            }
+        return null;
+    }
+
     public static DateTimeOffset? Date(JsonElement root, params string[] names)
     {
         var text = String(root, names);

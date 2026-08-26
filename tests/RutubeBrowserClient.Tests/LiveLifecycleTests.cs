@@ -34,6 +34,8 @@ public sealed class LiveLifecycleTests
         Assert.Equal("https://rutube.ru/video/private/a47c16f9db2a6e9b5fd1426596cb686d/?p=private-playback-key", result.PlaybackUrl!.ToString());
         Assert.Equal(RutubeLiveVisibility.LinkOnly, result.Visibility);
         Assert.True(result.AutoStart);
+        Assert.Equal(7, result.CurrentViewers);
+        Assert.Equal(19, result.TotalViews);
         Assert.DoesNotContain("super-secret-key", result.ToString());
         Assert.DoesNotContain("super-secret-key", result.Ingest.ToString());
         var captured = handler.Requests.Single();
@@ -47,6 +49,26 @@ public sealed class LiveLifecycleTests
         Assert.Equal("Bearer access-secret", captured.Headers["Authorization"]);
         Assert.Contains("sessionid=cookie-secret", captured.Headers["Cookie"]);
         Assert.Equal("csrf-secret", captured.Headers["X-CSRFToken"]);
+    }
+
+    [Fact]
+    public async Task Detail_distinguishes_missing_audience_counters_from_confirmed_zero()
+    {
+        var responses = new Queue<string>(
+        [
+            """{"video":"live-100","stream_status":"actual"}""",
+            """{"video":"live-100","stream_status":"actual","viewers":0,"views_count":"0"}"""
+        ]);
+        var handler = new RecordingHandler((_, _) => Task.FromResult(TestData.Json(responses.Dequeue())));
+        await using var client = TestData.Client(handler);
+
+        var missing = await client.Live.GetAsync("live-100");
+        var zero = await client.Live.GetAsync("live-100");
+
+        Assert.Null(missing.CurrentViewers);
+        Assert.Null(missing.TotalViews);
+        Assert.Equal(0, zero.CurrentViewers);
+        Assert.Equal(0, zero.TotalViews);
     }
 
     [Fact]

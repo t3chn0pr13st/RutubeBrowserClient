@@ -79,6 +79,16 @@ public sealed class RutubeLiveStream
     public Uri? EmbedUrl { get; init; }
     public Uri? ThumbnailUrl { get; init; }
     public bool SignalPresent { get; init; }
+    /// <summary>
+    /// Текущее число одновременных зрителей. <c>null</c> означает, что
+    /// наблюдавшийся Studio-ответ не содержал поддерживаемого счётчика.
+    /// </summary>
+    public long? CurrentViewers { get; init; }
+    /// <summary>
+    /// Накопленное число просмотров. Это просмотры, а не гарантированно
+    /// уникальные зрители.
+    /// </summary>
+    public long? TotalViews { get; init; }
     public override string ToString() => $"RutubeLiveStream(Id={Id}, Status={Status}, StreamKey=[REDACTED])";
 }
 

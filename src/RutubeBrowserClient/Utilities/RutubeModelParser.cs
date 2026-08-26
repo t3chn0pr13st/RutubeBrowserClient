@@ -65,7 +65,14 @@ internal static class RutubeModelParser
             EmbedUrl = JsonLookup.Uri(root, "embed_url", "embed"),
             ThumbnailUrl = JsonLookup.Uri(root, "thumbnail_url", "thumbnail", "picture_url"),
             SignalPresent = JsonLookup.Bool(root, "signal_present", "has_signal", "is_signal") ??
-                string.Equals(providerStatus, "actual", StringComparison.OrdinalIgnoreCase)
+                string.Equals(providerStatus, "actual", StringComparison.OrdinalIgnoreCase),
+            // Studio has returned different spellings across front-end releases.
+            // Keep the aliases narrow and numeric so a boolean "online" flag is
+            // never mistaken for a viewer count.
+            CurrentViewers = NonNegative(JsonLookup.Int64(root,
+                "current_viewers", "viewers_online", "online_viewers", "viewers_count", "viewers")),
+            TotalViews = NonNegative(JsonLookup.Int64(root,
+                "hits", "views", "view_count", "views_count", "total_views"))
         };
     }
 
@@ -85,6 +92,8 @@ internal static class RutubeModelParser
             _ => RutubeLiveStreamStatus.Unknown
         };
     }
+
+    private static long? NonNegative(long? value) => value is { } number ? Math.Max(0, number) : null;
 
     private static RutubeApiException Contract(string operation, string field) =>
         new(operation + ".parse", System.Net.HttpStatusCode.OK, "contract_drift", $"Rutube response did not contain {field}.");
