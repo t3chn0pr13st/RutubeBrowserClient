@@ -19,7 +19,7 @@
   подключение существующего постоянного ключа без его смены и явная ротация постоянного ключа;
 - owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.8`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.9`, MIT.
 
 ## Быстрый старт
 

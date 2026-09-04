@@ -15,6 +15,7 @@ public sealed class RutubeClientOptions
     public string CreateVideoUploadSessionPath { get; set; } = "uploader/upload_session/?client=vulp&batch_id={0}";
     public string PrivateVideoPathFormat { get; set; } = "v2/video/private/{0}/?client=vulp";
     public string UpdateVideoPathFormat { get; set; } = "v2/video/{0}/?client=vl";
+    public string DeleteVideoPathFormat { get; set; } = "v2/video/{0}/?client=vulp";
     public string UploadProgressPathFormat { get; set; } = "uploader/{0}/progress/";
     public string TusUploadPathFormat { get; set; } = "upload/{0}";
     public string CreateStreamPath { get; set; } = "v2/video/create/stream/";

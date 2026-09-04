@@ -48,6 +48,9 @@ internal sealed partial class RutubeStudioApi : IDisposable
     public Task<JsonDocument> DeletePublicAsync(string path, string operation, CancellationToken ct) =>
         SendAsync(_apiClient, () => CreateRequest(HttpMethod.Delete, Public(path)), operation, _options.RequestTimeout, false, null, ct);
 
+    public Task<JsonDocument> DeleteStudioAsync(string path, string operation, CancellationToken ct) =>
+        SendAsync(_apiClient, () => CreateRequest(HttpMethod.Delete, Studio(path)), operation, _options.RequestTimeout, false, null, ct);
+
     public async Task<JsonDocument> PostMultipartAsync(
         Uri uri,
         IReadOnlyDictionary<string, string?> fields,

@@ -175,8 +175,10 @@ public sealed class RutubeVideosService
 
     public async Task DeleteAsync(string videoId, CancellationToken cancellationToken = default)
     {
-        var api = await _client.RequireApiAsync(cancellationToken).ConfigureAwait(false);
-        using var _ = await api.DeletePublicAsync(VideoPath(videoId), "video.delete", cancellationToken).ConfigureAwait(false);
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var path = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.DeleteVideoPathFormat, Segment(videoId));
+        using var _ = await api.DeleteStudioAsync(path, "video.delete", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Uri?> UploadThumbnailAsync(string videoId, RutubeUploadSource image, CancellationToken cancellationToken = default)

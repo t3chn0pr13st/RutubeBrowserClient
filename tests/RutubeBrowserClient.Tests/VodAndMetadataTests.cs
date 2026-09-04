@@ -167,7 +167,7 @@ public sealed class VodAndMetadataTests
     }
 
     [Fact]
-    public async Task Vod_get_update_delete_use_public_api_and_do_not_reupload()
+    public async Task Vod_get_update_use_public_api_and_delete_uses_current_studio_contract()
     {
         var handler = new RecordingHandler((request, _) => Task.FromResult(
             request.Method == HttpMethod.Delete ? TestData.Json("{}") : TestData.Json(TestData.Fixture("video.json"))));
@@ -187,6 +187,7 @@ public sealed class VodAndMetadataTests
         Assert.Equal("video-20", current.Id);
         Assert.Equal("video-20", updated.Id);
         Assert.Equal([HttpMethod.Get, HttpMethod.Patch, HttpMethod.Delete], handler.Requests.Select(x => x.Method));
+        Assert.Equal("https://studio.test/api/v2/video/video-20/?client=vulp", handler.Requests[2].Uri.ToString());
         using var patch = JsonDocument.Parse(handler.Requests[1].Body);
         Assert.True(patch.RootElement.GetProperty("is_hidden").GetBoolean());
     }
