@@ -234,7 +234,7 @@ public sealed class LiveLifecycleTests
         var capability = await client.Live.ProbeCapabilityAsync();
 
         Assert.True(capability.Available);
-        Assert.Equal("studio-v2-2026-08-06-r2", capability.ContractVersion);
+        Assert.Equal("studio-v2-2026-09-04-baldr-355", capability.ContractVersion);
         var request = handler.Requests.Single();
         Assert.Equal("/api/v2/video/stream/owner/", request.Uri.AbsolutePath);
         Assert.Equal("?stream_status=wait&page=1&per_page=1", request.Uri.Query);

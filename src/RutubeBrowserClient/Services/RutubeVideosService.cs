@@ -13,12 +13,145 @@ public sealed class RutubeVideosService
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
-        var api = await _client.RequireApiAsync(cancellationToken).ConfigureAwait(false);
-        var fields = Metadata(request.Title, request.Description, request.CategoryId, request.IsHidden, request.IsAdult, request.ScheduledAt);
-        if (!string.IsNullOrWhiteSpace(request.ClientReference)) fields["client_reference"] = request.ClientReference;
-        using var document = await api.PostMultipartAsync(api.Public(_client.Options.VideoPath), fields, "video_file", source,
-            "video.upload", cancellationToken, outcomeUnknownOnTransportFailure: !string.IsNullOrWhiteSpace(request.ClientReference),
-            clientReference: request.ClientReference, idempotencyKey: request.ClientReference).ConfigureAwait(false);
+        var session = await CreateUploadSessionAsync(source, request, cancellationToken).ConfigureAwait(false);
+        session = await PrepareUploadAsync(session, request, cancellationToken).ConfigureAwait(false);
+        session = await BeginUploadAsync(session, source, request.ClientReference, cancellationToken).ConfigureAwait(false);
+        session = await UploadAsync(session, source, cancellationToken).ConfigureAwait(false);
+        return await GetPrivateAsync(session.VideoId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RutubeVideoUploadSession> CreateUploadSessionAsync(
+        RutubeUploadSource source,
+        RutubeVideoCreateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var reference = request.ClientReference ?? Guid.NewGuid().ToString("N");
+        var batchId = StableBatchId(reference);
+        var createPath = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.CreateVideoUploadSessionPath, Uri.EscapeDataString(batchId));
+        using var created = await api.PostStudioAsync(createPath, new { title = request.Title }, "video.upload.create-session",
+            cancellationToken, outcomeUnknownOnTransportFailure: true, clientReference: reference,
+            idempotencyKey: reference).ConfigureAwait(false);
+        var videoId = JsonLookup.String(created.RootElement, "video", "video_id", "id")
+            ?? throw Contract("video.upload.create-session", "video id");
+        var sessionId = JsonLookup.String(created.RootElement, "sid", "session_id")
+            ?? throw Contract("video.upload.create-session", "session id");
+        var userId = _client.AccountId;
+        if (string.IsNullOrWhiteSpace(userId)) throw Contract("video.upload.create-session", "authenticated user id");
+        return new RutubeVideoUploadSession
+        {
+            VideoId = videoId,
+            SessionId = sessionId,
+            BatchId = batchId,
+            UserId = userId,
+            Length = source.Length,
+            Stage = RutubeVideoUploadStage.Created
+        };
+    }
+
+    public async Task<RutubeVideoUploadSession> PrepareUploadAsync(
+        RutubeVideoUploadSession session,
+        RutubeVideoCreateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(request);
+        request.Validate();
+        if (session.Stage is RutubeVideoUploadStage.MetadataReady or RutubeVideoUploadStage.TransferReady or RutubeVideoUploadStage.Uploaded)
+            return session;
+        if (session.Stage != RutubeVideoUploadStage.Created)
+            throw new ArgumentException("Rutube upload session is not ready for metadata.", nameof(session));
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var updatePath = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.UpdateVideoPathFormat, Segment(session.VideoId));
+        using var _ = await api.PatchStudioAsync(updatePath,
+            MetadataJson(request.Title, request.Description, request.CategoryId, request.IsHidden, request.IsAdult, request.ScheduledAt),
+            "video.upload.metadata", cancellationToken).ConfigureAwait(false);
+        return session with { Stage = RutubeVideoUploadStage.MetadataReady };
+    }
+
+    public async Task<RutubeVideoUploadSession> BeginUploadAsync(
+        RutubeVideoUploadSession session,
+        RutubeUploadSource source,
+        string? clientReference = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateUploadSession(session, source);
+        if (session.Stage is RutubeVideoUploadStage.TransferReady or RutubeVideoUploadStage.Uploaded)
+            return session;
+        if (session.Stage != RutubeVideoUploadStage.MetadataReady)
+            throw new ArgumentException("Rutube upload metadata is not ready.", nameof(session));
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var endpoint = api.Upload(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.TusUploadPathFormat, Segment(session.SessionId)));
+        var fingerprint = StableFingerprint(session, source);
+        var uploadUrl = await api.CreateTusUploadAsync(endpoint, source.Length, new Dictionary<string, string>
+        {
+            ["sessionId"] = session.SessionId,
+            ["videoId"] = session.VideoId,
+            ["userId"] = session.UserId,
+            ["currentFingerprint"] = fingerprint,
+            ["remoteFingerprint"] = fingerprint
+        }, clientReference ?? session.BatchId, cancellationToken).ConfigureAwait(false);
+        return session with { UploadUrl = uploadUrl.ToString(), Offset = 0, Stage = RutubeVideoUploadStage.TransferReady };
+    }
+
+    public async Task<RutubeVideoUploadSession> UploadAsync(
+        RutubeVideoUploadSession session,
+        RutubeUploadSource source,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateUploadSession(session, source);
+        if (session.Stage == RutubeVideoUploadStage.Uploaded) return session;
+        if (session.Stage != RutubeVideoUploadStage.TransferReady ||
+            !Uri.TryCreate(session.UploadUrl, UriKind.Absolute, out var uploadUrl))
+            throw new ArgumentException("Rutube upload session is not ready for transfer.", nameof(session));
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var offset = await api.GetTusOffsetAsync(uploadUrl, cancellationToken).ConfigureAwait(false);
+        if (offset > source.Length) throw Contract("video.upload.tus-head", "valid upload offset");
+        var chunkSize = Math.Clamp(_client.Options.TusChunkBytes, 1024 * 1024, 256 * 1024 * 1024);
+        while (offset < source.Length)
+        {
+            var count = Math.Min(chunkSize, source.Length - offset);
+            offset = await api.PatchTusAsync(uploadUrl, source, offset, count, cancellationToken).ConfigureAwait(false);
+        }
+        return session with { Offset = offset, Stage = RutubeVideoUploadStage.Uploaded };
+    }
+
+    public async Task<RutubeVideoUploadProgress> GetUploadProgressAsync(string videoId, CancellationToken cancellationToken = default)
+    {
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var path = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.UploadProgressPathFormat, Segment(videoId));
+        using var document = await api.GetStudioAsync(path, "video.upload.progress", cancellationToken).ConfigureAwait(false);
+        var root = JsonLookup.Unwrap(document.RootElement);
+        var progressElement = JsonLookup.Find(root, "progress");
+        var state = progressElement is { ValueKind: System.Text.Json.JsonValueKind.Object }
+            ? JsonLookup.String(progressElement.Value, "state") ?? "processing"
+            : "complete";
+        double? progress = null;
+        if (progressElement is { ValueKind: System.Text.Json.JsonValueKind.Object } &&
+            JsonLookup.Find(progressElement.Value, "progress") is { } value && value.TryGetDouble(out var number)) progress = number;
+        var action = JsonLookup.Find(root, "action_reason");
+        var actionId = action is { ValueKind: System.Text.Json.JsonValueKind.Object }
+            ? (int?)JsonLookup.Int64(action.Value, "id")
+            : null;
+        var actionName = action is { ValueKind: System.Text.Json.JsonValueKind.Object }
+            ? JsonLookup.String(action.Value, "name", "slug")
+            : null;
+        return new RutubeVideoUploadProgress(videoId, state.Trim().ToLowerInvariant(), progress, actionId, actionName);
+    }
+
+    public async Task<RutubeVideo> GetPrivateAsync(string videoId, CancellationToken cancellationToken = default)
+    {
+        var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
+        var path = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            _client.Options.PrivateVideoPathFormat, Segment(videoId));
+        using var document = await api.GetStudioAsync(path, "video.get-private", cancellationToken).ConfigureAwait(false);
         return RutubeModelParser.Video(document.RootElement);
     }
 
@@ -73,6 +206,40 @@ public sealed class RutubeVideosService
 
     private string VideoPath(string id) => _client.Options.VideoPath.TrimEnd('/') + "/" + Segment(id) + "/";
 
+    private async Task<RutubeStudioApi> PrivateApiAsync(CancellationToken cancellationToken)
+    {
+        var api = await _client.RequireApiAsync(cancellationToken).ConfigureAwait(false);
+        api.EnsurePrivateApiEnabled();
+        return api;
+    }
+
+    private static string StableBatchId(string reference)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(reference));
+        return Convert.ToHexString(hash).ToLowerInvariant()[..24];
+    }
+
+    private static string StableFingerprint(RutubeVideoUploadSession session, RutubeUploadSource source)
+    {
+        var canonical = $"{session.BatchId}|{session.VideoId}|{source.FileName}|{source.Length}";
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonical)))
+            .ToLowerInvariant()[..20];
+    }
+
+    private static void ValidateUploadSession(RutubeVideoUploadSession session, RutubeUploadSource source)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(source);
+        if (session.Length != source.Length) throw new ArgumentException("Upload source length does not match the Rutube upload session.", nameof(source));
+        _ = Segment(session.VideoId);
+        _ = Segment(session.SessionId);
+        if (string.IsNullOrWhiteSpace(session.BatchId) || string.IsNullOrWhiteSpace(session.UserId))
+            throw new ArgumentException("Rutube upload session is incomplete.", nameof(session));
+    }
+
+    private static RutubeApiException Contract(string operation, string field) =>
+        new(operation, System.Net.HttpStatusCode.OK, "contract_drift", $"Rutube response did not contain {field}.");
+
     private static Dictionary<string, object?> MetadataJson(string title, string description, string categoryId, bool hidden, bool adult, DateTimeOffset? scheduled) => new()
     {
         ["title"] = title,
@@ -83,13 +250,4 @@ public sealed class RutubeVideosService
         ["publish_at"] = scheduled?.UtcDateTime.ToString("O")
     };
 
-    private static Dictionary<string, string?> Metadata(string title, string description, string categoryId, bool hidden, bool adult, DateTimeOffset? scheduled) => new()
-    {
-        ["title"] = title,
-        ["description"] = description,
-        ["category"] = categoryId,
-        ["is_hidden"] = hidden ? "true" : "false",
-        ["is_adult"] = adult ? "true" : "false",
-        ["publish_at"] = scheduled?.UtcDateTime.ToString("O")
-    };
 }

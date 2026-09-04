@@ -13,12 +13,13 @@
 - `IRutubeSessionStore` и атомарный `FileRutubeSessionStore` с правами `0600` (`0700` для каталога);
 - cookie, CSRF и bearer-заголовки, одно безопасное обновление access token после `401`;
 - typed identity и категории;
-- VOD: потоковая загрузка, чтение, изменение, удаление и обложка;
+- VOD: resumable TUS-загрузка больших файлов, restart-safe стадии, скрытый доступ по ссылке,
+  чтение, изменение, удаление и обложка;
 - Live: capability probe, create/detail/update/start/finish/delete, текущие зрители/просмотры, обложка, временный ключ,
   подключение существующего постоянного ключа без его смены и явная ротация постоянного ключа;
 - owner-scoped reconciliation по client-reference или неизменяемым title/planned time после неоднозначного timeout;
 - безопасные исключения: response body, cookies, access/refresh/stream keys не попадают в сообщения;
-- NuGet `RutubeBrowserClient` версии `0.1.6`, MIT.
+- NuGet `RutubeBrowserClient` версии `0.1.7`, MIT.
 
 ## Быстрый старт
 
@@ -41,6 +42,22 @@ await using var client = RutubeClient.Create("rutube.session.json", options =>
 });
 
 var identity = await client.EnsureAuthenticatedAsync();
+
+// Упрощённый VOD-вызов использует Studio upload session + TUS, а не старый
+// multipart POST. Для durable worker можно отдельно сохранять защищённый
+// RutubeVideoUploadSession после CreateUploadSessionAsync, PrepareUploadAsync,
+// BeginUploadAsync и UploadAsync; повторный UploadAsync сначала читает remote offset.
+var vod = await client.Videos.UploadAsync(
+    RutubeUploadSource.FromFile("lesson.mkv"),
+    new RutubeVideoCreateRequest
+    {
+        Title = "Запись занятия",
+        Description = "Доступ по ссылке",
+        CategoryId = "63",
+        IsHidden = true,
+        ClientReference = "lesson-youtube-id"
+    });
+
 var live = await client.Live.CreateAsync(new RutubeLiveCreateRequest
 {
     Title = "Утренняя практика",
@@ -67,11 +84,17 @@ live = await client.Live.RotateStreamKeyAsync(live.Id, RutubeStreamKeyMode.Perma
 
 ## Private Studio contract
 
-Автоматизация live опирается на наблюдавшийся контракт `studio-v2-2026-08-06-r2`, потому по умолчанию
+Автоматизация VOD/live опирается на наблюдавшийся контракт `studio-v2-2026-09-04-baldr-355`, потому по умолчанию
 `EnablePrivateStudioApi=false`. Перед включением новая версия должна пройти `ProbeCapabilityAsync()`
 и приватный canary: создать скрытую трансляцию, загрузить обложку, запустить, завершить и убедиться,
 что запись доступна по прежнему provider id. Все paths и transition status values конфигурируемы в
 `RutubeClientOptions`, но прикладной код должен использовать только typed services.
+
+VOD следует текущему Studio-потоку: создание `/uploader/upload_session/`, PATCH скрытых
+метаданных, перенос файла по TUS на отдельный upload-host, polling обработки и приватный
+readback. Cookie/bearer/CSRF применяются только к Studio API и никогда не отправляются на
+TUS-host. Приватный `source_url` и `embed_url` сохраняют grant `p`, чтобы видео можно было
+показывать встроенным плеером только пользователям, получившим ссылку.
 
 Для выбора существующего постоянного ключа Studio JS `release-baldr-354` отправляет в
 `permkey` только `is_active=true`. Поле `new_key=true` зарезервировано для явного сброса/ротации

@@ -10,7 +10,7 @@ internal static partial class SafeText
     [GeneratedRegex("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+")]
     private static partial Regex BearerRegex();
 
-    [GeneratedRegex("(?i)([?&](?:token|key|signature|secret|auth)=[^&#\\s]+)")]
+    [GeneratedRegex("(?i)([?&](?:p|token|key|signature|secret|auth)=[^&#\\s]+)")]
     private static partial Regex QuerySecretRegex();
 
     public static string Sanitize(string? value, int maxLength = 400)

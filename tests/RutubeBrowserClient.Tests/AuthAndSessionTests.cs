@@ -127,7 +127,7 @@ public sealed class AuthAndSessionTests
     public async Task Provider_error_redacts_named_secrets_and_query_tokens()
     {
         var handler = new RecordingHandler((_, _) => Task.FromResult(TestData.Json(
-            """{"code":"invalid","message":"access_token=abc123 stream_key=rtmp-secret cookie:\"cookie-leak\" https://x.test/?token=url-secret"}""",
+            """{"code":"invalid","message":"access_token=abc123 stream_key=rtmp-secret cookie:\"cookie-leak\" https://x.test/?token=url-secret https://rutube.ru/video/private/id/?p=private-grant"}""",
             HttpStatusCode.BadRequest)));
         await using var client = TestData.Client(handler);
 
@@ -137,11 +137,13 @@ public sealed class AuthAndSessionTests
         Assert.DoesNotContain("rtmp-secret", exception.Message);
         Assert.DoesNotContain("url-secret", exception.Message);
         Assert.DoesNotContain("cookie-leak", exception.Message);
+        Assert.DoesNotContain("private-grant", exception.Message);
         Assert.Contains("[REDACTED]", exception.Message);
         Assert.DoesNotContain("abc123", exception.ToString());
         Assert.DoesNotContain("rtmp-secret", exception.ToString());
         Assert.DoesNotContain("url-secret", exception.ToString());
         Assert.DoesNotContain("cookie-leak", exception.ToString());
+        Assert.DoesNotContain("private-grant", exception.ToString());
     }
 
     private sealed class StubAuthenticator(RutubeSession session) : IInteractiveAuthenticator

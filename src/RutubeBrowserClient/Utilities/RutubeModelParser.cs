@@ -8,6 +8,19 @@ internal static class RutubeModelParser
     {
         root = JsonLookup.Unwrap(root);
         var id = JsonLookup.String(root, "video_id", "id", "uuid") ?? throw Contract("video", "video id");
+        var action = JsonLookup.Find(root, "action_reason");
+        var actionId = action is { ValueKind: JsonValueKind.Object } ? JsonLookup.Int64(action.Value, "id") : null;
+        var actionName = action is { ValueKind: JsonValueKind.Object } ? JsonLookup.String(action.Value, "name", "slug") : null;
+        var status = JsonLookup.String(root, "status", "video_status", "displayed_status") ?? actionId switch
+        {
+            0 => "ready",
+            32 => "moderation",
+            5 or 15 or 16 or 20 => "processing",
+            1 or 2 or 3 or 4 or 6 or 7 or 8 or 9 or 10 or 11 or 17 or 21 or 22 => "failed",
+            _ => actionName ?? "unknown"
+        };
+        var playbackUrl = JsonLookup.Uri(root, "video_url", "source_url", "url");
+        var embedUrl = EnsurePrivateEmbedUrl(id, playbackUrl, JsonLookup.Uri(root, "embed_url", "embed"));
         return new RutubeVideo(
             id,
             JsonLookup.String(root, "owner_id", "author_id", "user_id"),
@@ -15,11 +28,44 @@ internal static class RutubeModelParser
             JsonLookup.String(root, "description") ?? "",
             JsonLookup.String(root, "category_id", "category"),
             JsonLookup.Bool(root, "is_hidden", "hidden") ?? false,
-            JsonLookup.String(root, "status", "video_status") ?? "unknown",
-            JsonLookup.Uri(root, "video_url", "source_url", "url"),
-            JsonLookup.Uri(root, "embed_url", "embed"),
+            status,
+            playbackUrl,
+            embedUrl,
             JsonLookup.Uri(root, "thumbnail_url", "thumbnail", "picture_url"));
     }
+
+    private static Uri? EnsurePrivateEmbedUrl(string id, Uri? playbackUrl, Uri? embedUrl)
+    {
+        if (playbackUrl is null || !IsRutubeHost(playbackUrl.IdnHost))
+            return embedUrl;
+        var privateKey = QueryValue(playbackUrl, "p");
+        if (string.IsNullOrWhiteSpace(privateKey)) return embedUrl;
+        if (embedUrl is null)
+            embedUrl = new Uri($"https://rutube.ru/play/embed/{Uri.EscapeDataString(id)}/", UriKind.Absolute);
+        if (!IsRutubeHost(embedUrl.IdnHost) || !string.IsNullOrWhiteSpace(QueryValue(embedUrl, "p")))
+            return embedUrl;
+        var builder = new UriBuilder(embedUrl);
+        var retained = builder.Query.TrimStart('?');
+        builder.Query = string.IsNullOrWhiteSpace(retained)
+            ? $"p={Uri.EscapeDataString(privateKey)}"
+            : $"{retained}&p={Uri.EscapeDataString(privateKey)}";
+        return builder.Uri;
+    }
+
+    private static string? QueryValue(Uri uri, string name)
+    {
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pieces = pair.Split('=', 2);
+            if (Uri.UnescapeDataString(pieces[0]).Equals(name, StringComparison.OrdinalIgnoreCase))
+                return pieces.Length == 2 ? Uri.UnescapeDataString(pieces[1]) : "";
+        }
+        return null;
+    }
+
+    private static bool IsRutubeHost(string host) =>
+        host.Equals("rutube.ru", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".rutube.ru", StringComparison.OrdinalIgnoreCase);
 
     public static RutubeLiveStream Live(JsonElement root)
     {

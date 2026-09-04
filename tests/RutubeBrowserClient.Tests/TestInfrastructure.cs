@@ -82,6 +82,7 @@ internal static class TestData
             EnablePrivateStudioApi = enablePrivateApi,
             StudioApiBaseUrl = "https://studio.test/api/",
             PublicApiBaseUrl = "https://public.test/api/",
+            UploadBaseUrl = "https://upload.test/",
             StudioBaseUrl = "https://studio.test/",
             ApiHttpMessageHandlerFactory = () => api,
             UploadHttpMessageHandlerFactory = () => upload ?? api,
