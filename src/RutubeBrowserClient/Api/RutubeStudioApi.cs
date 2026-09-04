@@ -254,6 +254,8 @@ internal sealed partial class RutubeStudioApi : IDisposable
         var request = new HttpRequestMessage(method, uri);
         request.Headers.TryAddWithoutValidation("Tus-Resumable", "1.0.0");
         request.Headers.UserAgent.ParseAdd(_session.UserAgent ?? _options.UserAgent);
+        request.Headers.TryAddWithoutValidation("Origin", new Uri(_options.StudioBaseUrl).GetLeftPart(UriPartial.Authority));
+        request.Headers.Referrer = new Uri(_options.StudioBaseUrl);
         return request;
     }
 

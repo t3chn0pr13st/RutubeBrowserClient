@@ -32,8 +32,7 @@ public sealed class RutubeClientOptions
     public bool HeadlessLogin { get; set; }
     public TimeSpan LoginTimeout { get; set; } = TimeSpan.FromMinutes(10);
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(60);
-    public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromMinutes(60);
-    public int TusChunkBytes { get; set; } = 64 * 1024 * 1024;
+    public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromHours(6);
     public TimeSpan TokenExpirySkew { get; set; } = TimeSpan.FromMinutes(1);
     public string UserAgent { get; set; } =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +

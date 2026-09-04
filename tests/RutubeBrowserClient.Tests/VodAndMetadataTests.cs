@@ -112,6 +112,8 @@ public sealed class VodAndMetadataTests
         Assert.False(tusCreate.Headers.ContainsKey("Authorization"));
         Assert.False(tusCreate.Headers.ContainsKey("Cookie"));
         Assert.False(tusCreate.Headers.ContainsKey("X-CSRFToken"));
+        Assert.Equal("https://studio.test", tusCreate.Headers["Origin"]);
+        Assert.Equal("https://studio.test/", tusCreate.Headers["Referer"]);
         Assert.Equal("application/offset+octet-stream", upload.Requests[2].ContentType);
         Assert.Equal(bytes.Length.ToString(), upload.Requests[2].Headers["Content-Length"]);
     }

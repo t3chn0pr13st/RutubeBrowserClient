@@ -113,12 +113,13 @@ public sealed class RutubeVideosService
         var api = await PrivateApiAsync(cancellationToken).ConfigureAwait(false);
         var offset = await api.GetTusOffsetAsync(uploadUrl, cancellationToken).ConfigureAwait(false);
         if (offset > source.Length) throw Contract("video.upload.tus-head", "valid upload offset");
-        var chunkSize = Math.Clamp(_client.Options.TusChunkBytes, 1024 * 1024, 256 * 1024 * 1024);
-        while (offset < source.Length)
-        {
-            var count = Math.Min(chunkSize, source.Length - offset);
-            offset = await api.PatchTusAsync(uploadUrl, source, offset, count, cancellationToken).ConfigureAwait(false);
-        }
+        // Rutube's current TUS gateway treats the end of a successful PATCH as
+        // completion, even when Upload-Length is larger. Match Studio's tus-js
+        // client and send all remaining bytes in one request. If the transport
+        // is interrupted, the durable session can still resume from HEAD's
+        // remote offset on the next invocation.
+        if (offset < source.Length)
+            offset = await api.PatchTusAsync(uploadUrl, source, offset, source.Length - offset, cancellationToken).ConfigureAwait(false);
         return session with { Offset = offset, Stage = RutubeVideoUploadStage.Uploaded };
     }
 
