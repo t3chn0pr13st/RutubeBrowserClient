@@ -14,6 +14,11 @@ await server.ImportSessionAsync("rutube.portable.session.json");
 Можно экспортировать/importировать base64 через `ExportSessionToBase64Async` и
 `ImportSessionFromBase64Async`. Base64 не является шифрованием.
 
+KundaliniHub поддерживает одноразовое прямое сопряжение без файла. Получите URL и код в
+`Настройки → Площадки → RutubeBrowserClient`, выполните команду `pair <hub-pairing-url>` и
+вставьте код в интерактивный prompt. Код передаётся отдельным HTTPS-заголовком, а session
+export формируется в памяти и отправляется непосредственно в Hub.
+
 ## Live lifecycle
 
 1. `EnsureAuthenticatedAsync` и `Live.ProbeCapabilityAsync`.

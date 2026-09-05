@@ -10,6 +10,7 @@
 ## Возможности
 
 - интерактивный Playwright-вход с OTP/CAPTCHA и portable export/import сессии;
+- прямое одноразовое сопряжение с KundaliniHub по HTTPS без ручного export/upload файла;
 - `IRutubeSessionStore` и атомарный `FileRutubeSessionStore` с правами `0600` (`0700` для каталога);
 - cookie, CSRF и bearer-заголовки, одно безопасное обновление access token после `401`;
 - typed identity и категории;
@@ -31,6 +32,17 @@ RUTUBE_PRIVATE_STUDIO_API=true dotnet run \
 RUTUBE_PRIVATE_STUDIO_API=true dotnet run \
   --project samples/RutubeBrowserClient.ConsoleSample -- probe
 ```
+
+Для прямого подключения к KundaliniHub создайте одноразовый код в настройках Hub и выполните
+показанную там команду. Код команда запросит без отображения и не сохранит в истории shell:
+
+```bash
+dotnet run --project samples/RutubeBrowserClient.ConsoleSample -- \
+  pair "https://hub.example/api/rutube-session-pairings/TICKET_ID"
+```
+
+После локального входа session export формируется в памяти, передаётся по HTTPS и проверяется Hub
+на соответствие закреплённому Rutube account id. Portable-файл при этом не создаётся.
 
 ```csharp
 using RutubeBrowserClient;
